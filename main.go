@@ -12,11 +12,18 @@ import (
 func main() {
 
 	fmt.Printf("Hi your local network addr: %s\n", getLocalAddr())
-	fmt.Println("Want to connect? y/n")
-
 	input := bufio.NewScanner(os.Stdin)
-	connectAddr := ""
 
+	nickName := ""
+
+	fmt.Println("Enter your nickname")
+	for input.Scan() {
+		nickName = input.Text()
+		break
+	}
+
+	fmt.Println("Want to connect? y/n")
+	connectAddr := ""
 	for input.Scan() {
 		if input.Text() == "y" {
 			fmt.Println("Enter net address to connect")
@@ -33,7 +40,7 @@ func main() {
 		defer conn.Close()
 
 		fmt.Printf("Connected to %s\n", connectAddr)
-		connect(conn)
+		connect(conn, nickName)
 	} else {
 		listener, err := net.Listen("tcp", ":8000")
 		if err != nil {
@@ -49,23 +56,20 @@ func main() {
 				continue
 			}
 
-			connect(conn)
+			connect(conn, nickName)
 		}
 	}
 }
 
-func connect(conn net.Conn) {
+func connect(conn net.Conn, nickName string) {
 
 	done := make(chan struct{})
 
 	go func() {
 		input := bufio.NewScanner(os.Stdin)
 
-		fmt.Print("You: ")
 		for input.Scan() {
-			fmt.Print("You: ")
-			message := fmt.Sprintf(input.Text() + "\n")
-			sendMessage(conn, message)
+			sendMessage(conn, input.Text(), nickName)
 		}
 
 		done <- struct{}{}
@@ -96,7 +100,10 @@ func getConnectAddr(scan *bufio.Scanner) string {
 	return connectAddr
 }
 
-func sendMessage(c net.Conn, message string) {
+func sendMessage(c net.Conn, message string, nickName string) {
+
+	fmt.Printf("You: %s\n", message)
+	message = fmt.Sprintf("%s: %s\n", nickName, message)
 	_, err := c.Write([]byte(message))
 
 	if err != nil {
