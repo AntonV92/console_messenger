@@ -3,17 +3,13 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
 )
 
 func main() {
-	listener, err := net.Listen("tcp", ":8000")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer listener.Close()
 
 	fmt.Printf("Hi your local network addr: %s\n", getLocalAddr())
 	fmt.Println("Want to connect? y/n")
@@ -30,19 +26,26 @@ func main() {
 	}
 
 	if connectAddr != "" {
-		go connect(connectAddr)
-	}
-
-	for {
-		conn, err := listener.Accept()
+		connect(connectAddr)
+	} else {
+		listener, err := net.Listen("tcp", ":8000")
 		if err != nil {
-			log.Print(err)
-			continue
+			log.Fatal(err)
 		}
+		defer listener.Close()
+		for {
 
-		go handleConn(conn)
+			conn, err := listener.Accept()
+			if err != nil {
+				log.Print(err)
+				continue
+			}
 
+			go handleConn(conn)
+
+		}
 	}
+
 }
 
 func connect(connectAddr string) {
@@ -54,14 +57,32 @@ func connect(connectAddr string) {
 
 	fmt.Printf("Connected to %s\n", connectAddr)
 
-	input := bufio.NewScanner(os.Stdin)
+	done := make(chan struct{})
 
-	fmt.Print("You: ")
-	for input.Scan() {
+	go func() {
+		fmt.Println("Go into send func")
+		input := bufio.NewScanner(os.Stdin)
+
 		fmt.Print("You: ")
-		message := fmt.Sprintf(input.Text() + "\n")
-		sendMessage(listener, message)
-	}
+		for input.Scan() {
+			fmt.Print("You: ")
+			message := fmt.Sprintf(input.Text() + "\n")
+			sendMessage(listener, message)
+		}
+
+		done <- struct{}{}
+	}()
+
+	go func() {
+		fmt.Println("go into revieve func")
+		if _, err := io.Copy(os.Stdout, listener); err != nil {
+			log.Fatal(err)
+			done <- struct{}{}
+		}
+		done <- struct{}{}
+	}()
+	<-done
+
 }
 
 func getConnectAddr(scan *bufio.Scanner) string {
