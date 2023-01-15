@@ -21,17 +21,25 @@ func main() {
 		if input.Text() == "y" {
 			fmt.Println("Enter net address to connect")
 			connectAddr = getConnectAddr(input)
-			break
 		}
+		break
 	}
 
 	if connectAddr != "" {
-		connect(connectAddr)
+		conn, err := net.Dial("tcp", connectAddr+":8000")
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer conn.Close()
+
+		fmt.Printf("Connected to %s\n", connectAddr)
+		connect(conn)
 	} else {
 		listener, err := net.Listen("tcp", ":8000")
 		if err != nil {
 			log.Fatal(err)
 		}
+		fmt.Println("Waiting for connection...")
 		defer listener.Close()
 		for {
 
@@ -41,41 +49,30 @@ func main() {
 				continue
 			}
 
-			go handleConn(conn)
-
+			connect(conn)
 		}
 	}
-
 }
 
-func connect(connectAddr string) {
-	listener, err := net.Dial("tcp", connectAddr+":8000")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer listener.Close()
-
-	fmt.Printf("Connected to %s\n", connectAddr)
+func connect(conn net.Conn) {
 
 	done := make(chan struct{})
 
 	go func() {
-		fmt.Println("Go into send func")
 		input := bufio.NewScanner(os.Stdin)
 
 		fmt.Print("You: ")
 		for input.Scan() {
 			fmt.Print("You: ")
 			message := fmt.Sprintf(input.Text() + "\n")
-			sendMessage(listener, message)
+			sendMessage(conn, message)
 		}
 
 		done <- struct{}{}
 	}()
 
 	go func() {
-		fmt.Println("go into revieve func")
-		if _, err := io.Copy(os.Stdout, listener); err != nil {
+		if _, err := io.Copy(os.Stdout, conn); err != nil {
 			log.Fatal(err)
 			done <- struct{}{}
 		}
@@ -86,7 +83,6 @@ func connect(connectAddr string) {
 }
 
 func getConnectAddr(scan *bufio.Scanner) string {
-
 	connectAddr := ""
 	for scan.Scan() {
 		if connectAddr = scan.Text(); connectAddr != "" || net.ParseIP(connectAddr) != nil {
@@ -98,25 +94,6 @@ func getConnectAddr(scan *bufio.Scanner) string {
 		}
 	}
 	return connectAddr
-}
-
-func handleConn(c net.Conn) {
-	defer c.Close()
-	remoteAddr := c.RemoteAddr()
-
-	fmt.Printf("Client connected: %s\n", remoteAddr)
-
-	for {
-		input := make([]byte, 4096)
-
-		_, err := c.Read(input)
-
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		fmt.Println(string(input))
-	}
 }
 
 func sendMessage(c net.Conn, message string) {
